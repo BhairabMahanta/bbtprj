@@ -75,26 +75,18 @@ export class ReferralService {
     return generationMap;
   }
 
-/**
- * Calculate points based on exponential generation system
- * Generation 1 (direct): No points
- * Generation 2: 4 referrals = 1 point
- * Generation 3: 8 referrals = 1 point
- * Generation n: 2^n referrals = 1 point
- */
+  /**
+   * Calculate points based on exponential generation system
+   * Generation 1: 2 referrals = 1 point
+   * Generation 2: 4 referrals = 1 point
+   * Generation 3: 8 referrals = 1 point
+   * Generation n: 2^n referrals = 1 point
+   */
 static calculatePoints(generationStats: Map<string, number>): number {
   let totalPoints = 0;
 
   for (const [generationStr, count] of generationStats.entries()) {
-    const generation = parseInt(generationStr);
-    
-    // Skip generation 1 (direct referrals) - they don't give points
-    if (generation === 1) {
-      console.log(`[Points] Generation ${generation}: ${count} referrals = 0 points (direct referrals excluded)`);
-      continue; // Skip to next iteration
-    }
-    
-    // Calculate points for generation 2+
+    const generation = parseInt(generationStr); // Convert string back to number for calculation
     const requiredForPoint = Math.pow(2, generation);
     const pointsFromGeneration = Math.floor(count / requiredForPoint);
     totalPoints += pointsFromGeneration;
@@ -104,7 +96,6 @@ static calculatePoints(generationStats: Map<string, number>): number {
 
   return totalPoints;
 }
-
 
   /**
    * Get all referrals (direct and indirect) for a user
