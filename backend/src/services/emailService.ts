@@ -8,11 +8,11 @@ class EmailService {
   
   constructor() {
     this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '465'),
+      secure: process.env.EMAIL_PORT === '465', // true for 465, false for 587
       auth: {
-        user: process.env.SMTP_EMAIL || '',
+        user: process.env.SMTP_EMAIL || '', // ✅ YOUR VARIABLE NAME
         pass: process.env.SMTP_PASSWORD || ''
       },
       connectionTimeout: 10000,
@@ -20,9 +20,9 @@ class EmailService {
     });
     
     console.log('Email service initialized with:', {
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: process.env.EMAIL_PORT === '465',
       user: process.env.SMTP_EMAIL ? process.env.SMTP_EMAIL : 'not set'
     });
   }
@@ -38,56 +38,89 @@ class EmailService {
   <title>Email Verification</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       margin: 0;
       padding: 0;
+      background-color: #f5f5f5;
     }
     .container {
       max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: #2d2d2d;
-      color: #e0e0e0;
+      margin: 40px auto;
+      background-color: #ffffff;
       border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     .header {
-      color: #e74c3c;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff;
+      padding: 30px;
       text-align: center;
+    }
+    .header h2 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .content {
+      padding: 40px 30px;
+      color: #333333;
     }
     .verification-code {
-      background-color: #3d3d3d;
-      padding: 15px;
-      border-radius: 5px;
+      background-color: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
       text-align: center;
-      margin: 20px 0;
+      margin: 30px 0;
+      border: 2px dashed #667eea;
     }
     .code {
-      font-size: 32px;
-      letter-spacing: 5px;
+      font-size: 36px;
+      letter-spacing: 8px;
       font-weight: bold;
-      color: #ffffff;
+      color: #667eea;
+      font-family: 'Courier New', monospace;
+    }
+    .info-box {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
     }
     .footer {
+      background-color: #f8f9fa;
+      padding: 20px;
       text-align: center;
-      margin-top: 30px;
       font-size: 12px;
-      color: #999999;
+      color: #6c757d;
+      border-top: 1px solid #e9ecef;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2 class="header">Welcome to Masks & Machetes!</h2>
-    <p>Hello ${username},</p>
-    <p>Thank you for registering! Please verify your email address to complete your registration.</p>
-    <div class="verification-code">
-      <h3 style="margin: 0; color: #e74c3c;">Your Verification Code</h3>
-      <p class="code">${otp}</p>
+    <div class="header">
+      <h2>✉️ Email Verification</h2>
     </div>
-    <p>This code will expire in 15 minutes.</p>
-    <p>If you did not create an account, please ignore this email.</p>
+    <div class="content">
+      <p>Hello <strong>${username}</strong>,</p>
+      <p>Thank you for signing up! Please verify your email address to complete your registration.</p>
+      
+      <div class="verification-code">
+        <h3 style="margin: 0 0 10px 0; color: #667eea;">Your Verification Code</h3>
+        <p class="code">${otp}</p>
+      </div>
+      
+      <div class="info-box">
+        <p style="margin: 0;">⏱️ This code will expire in <strong>15 minutes</strong></p>
+      </div>
+      
+      <p>Enter this code on the verification page to activate your account.</p>
+      <p>If you didn't create an account, please ignore this email.</p>
+    </div>
     <div class="footer">
-      <p>Shadowland Universes.</p>
+      <p>This is an automated message, please do not reply to this email.</p>
+      <p>&copy; ${new Date().getFullYear()} Your App. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -95,15 +128,15 @@ class EmailService {
       `;
       
       const mailOptions = {
-        from: process.env.SMTP_FROM || process.env.SMTP_EMAIL || 'noreply@masksandmachetes.com',
+        from: process.env.EMAIL_FROM || process.env.SMTP_EMAIL,
         to: email,
-        subject: 'Verify Your Email - Masks & Machetes',
+        subject: 'Verify Your Email Address',
         html: html
       };
       
       try {
         const info = await this.transporter.sendMail(mailOptions);
-        console.log('Email sent:', info.messageId);
+        console.log('Verification email sent:', info.messageId);
         return info;
       } catch (smtpError) {
         console.error('SMTP email failed:', smtpError);
@@ -115,7 +148,6 @@ class EmailService {
     }
   }
 
-  // ✅ NEW: Send password reset email
   async sendPasswordResetEmail(email: string, username: string, otp: string): Promise<any> {
     try {
       const html = `
@@ -127,65 +159,84 @@ class EmailService {
   <title>Password Reset</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       margin: 0;
       padding: 0;
+      background-color: #f5f5f5;
     }
     .container {
       max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: #2d2d2d;
-      color: #e0e0e0;
+      margin: 40px auto;
+      background-color: #ffffff;
       border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     .header {
-      color: #e74c3c;
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #ffffff;
+      padding: 30px;
       text-align: center;
+    }
+    .content {
+      padding: 40px 30px;
+      color: #333333;
     }
     .reset-code {
-      background-color: #3d3d3d;
-      padding: 15px;
-      border-radius: 5px;
+      background-color: #fff7ed;
+      padding: 20px;
+      border-radius: 8px;
       text-align: center;
-      margin: 20px 0;
+      margin: 30px 0;
+      border: 2px dashed #f59e0b;
     }
     .code {
-      font-size: 32px;
-      letter-spacing: 5px;
+      font-size: 36px;
+      letter-spacing: 8px;
       font-weight: bold;
-      color: #ffffff;
+      color: #f59e0b;
+      font-family: 'Courier New', monospace;
     }
     .warning {
-      background-color: #7f1d1d;
-      padding: 10px;
-      border-radius: 5px;
-      margin: 20px 0;
+      background-color: #fee2e2;
       border-left: 4px solid #dc2626;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
     }
     .footer {
+      background-color: #f8f9fa;
+      padding: 20px;
       text-align: center;
-      margin-top: 30px;
       font-size: 12px;
-      color: #999999;
+      color: #6c757d;
+      border-top: 1px solid #e9ecef;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2 class="header">🔐 Password Reset Request</h2>
-    <p>Hello ${username},</p>
-    <p>We received a request to reset your password. Use the code below to reset your password:</p>
-    <div class="reset-code">
-      <h3 style="margin: 0; color: #e74c3c;">Your Reset Code</h3>
-      <p class="code">${otp}</p>
+    <div class="header">
+      <h2>🔐 Password Reset Request</h2>
     </div>
-    <div class="warning">
-      <p style="margin: 0; font-weight: bold;">⚠️ This code expires in 15 minutes</p>
+    <div class="content">
+      <p>Hello <strong>${username}</strong>,</p>
+      <p>We received a request to reset your password. Use the code below to proceed:</p>
+      
+      <div class="reset-code">
+        <h3 style="margin: 0 0 10px 0; color: #f59e0b;">Your Reset Code</h3>
+        <p class="code">${otp}</p>
+      </div>
+      
+      <div class="warning">
+        <p style="margin: 0; font-weight: bold;">⚠️ This code expires in 15 minutes</p>
+      </div>
+      
+      <p>If you didn't request this, please ignore this email. Your password will remain unchanged.</p>
     </div>
-    <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
     <div class="footer">
-      <p>Shadowland Universes.</p>
+      <p>This is an automated message, please do not reply to this email.</p>
+      <p>&copy; ${new Date().getFullYear()} Your App. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -193,9 +244,9 @@ class EmailService {
       `;
       
       const mailOptions = {
-        from: process.env.SMTP_FROM || process.env.SMTP_EMAIL || 'noreply@masksandmachetes.com',
+        from: process.env.EMAIL_FROM || process.env.SMTP_EMAIL,
         to: email,
-        subject: '🔐 Password Reset Code - Masks & Machetes',
+        subject: '🔐 Password Reset Code',
         html: html
       };
       
@@ -216,7 +267,7 @@ class EmailService {
   private async sendWithEtherealFallback(mailOptions: any): Promise<any> {
     try {
       const testAccount = await nodemailer.createTestAccount();
-      console.log('Created Ethereal test account for fallback email delivery');
+      console.log('Created Ethereal test account for fallback');
       
       const etherealTransporter = nodemailer.createTransport({
         host: testAccount.smtp.host,
@@ -229,30 +280,11 @@ class EmailService {
       });
       
       const info = await etherealTransporter.sendMail(mailOptions);
-      console.log('Email sent with Ethereal fallback:', info.messageId);
-      console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+      console.log('Ethereal Preview URL:', nodemailer.getTestMessageUrl(info));
       return info;
     } catch (fallbackError) {
-      console.error('Ethereal fallback also failed:', fallbackError);
+      console.error('Ethereal fallback failed:', fallbackError);
       throw fallbackError;
-    }
-  }
-  
-  async sendSimpleEmail(email: string, subject: string, text: string): Promise<any> {
-    try {
-      const mailOptions = {
-        from: process.env.SMTP_FROM || process.env.SMTP_EMAIL || 'noreply@masksandmachetes.com',
-        to: email,
-        subject: subject,
-        text: text
-      };
-      
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('Simple email sent:', info.messageId);
-      return info;
-    } catch (error) {
-      console.error('Error sending simple email:', error);
-      throw new Error(`Failed to send simple email: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }
