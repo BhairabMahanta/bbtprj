@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, TrophyIcon } from 'lucide-react';
-import { referralApi } from '@/lib/api';
+import { Loader2, TrophyIcon, Award } from 'lucide-react';
+import { referralApi, authApi } from '@/lib/api';
 
 interface LeaderboardEntry {
   rank: number;
@@ -13,6 +13,7 @@ interface LeaderboardEntry {
   referralCode: string;
   directReferrals: number;
   totalReferrals: number;
+  points: number; // Add points
 }
 
 export function LeaderboardPage() {
@@ -22,25 +23,31 @@ export function LeaderboardPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [user, setUser] = useState<any>(null);
   const [userRank, setUserRank] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'points' | 'referrals'>('points'); // Default to points
 
   useEffect(() => {
     window.scrollTo(0, 0);
     loadUserData();
-    loadLeaderboard(1);
   }, []);
 
-  const loadUserData = () => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
+  useEffect(() => {
+    loadLeaderboard(1);
+  }, [sortBy]);
+
+  const loadUserData = async () => {
+    try {
+      // Fetch fresh user data from API
+      const userData = await authApi.getCurrentUser();
       setUser(userData);
+    } catch (error) {
+      console.error('Error loading user:', error);
     }
   };
 
   const loadLeaderboard = async (page: number) => {
     setLoading(true);
     try {
-      const response = await referralApi.getLeaderboard(page, 50);
+      const response = await referralApi.getLeaderboard(page, 50, sortBy); // Pass sortBy
       setLeaderboard(response.data);
       setCurrentPage(response.pagination.page);
       setTotalPages(response.pagination.pages);
@@ -72,39 +79,73 @@ export function LeaderboardPage() {
     );
   }
 
+  const userEntry = user ? leaderboard.find(entry => entry.userId === user.id) : null;
+
   return (
     <div className="space-y-8">
       {/* Header Section */}
       <section className="space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="rounded-lg bg-primary/10 p-3">
-            <TrophyIcon className="h-8 w-8 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="rounded-lg bg-primary/10 p-3">
+              <TrophyIcon className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold font-headline text-foreground">
+                Leaderboard
+              </h1>
+              <p className="text-base sm:text-lg text-muted-foreground">
+                Top performers in our community
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold font-headline text-foreground">
-              Leaderboard
-            </h1>
-            <p className="text-base sm:text-lg text-muted-foreground">
-              Top referrers in our community
-            </p>
+
+          {/* Sort Toggle */}
+          <div className="flex gap-2">
+            <Button
+              variant={sortBy === 'points' ? 'default' : 'outline'}
+              onClick={() => setSortBy('points')}
+              size="sm"
+            >
+              <Award className="mr-2 h-4 w-4" />
+              By Points
+            </Button>
+            <Button
+              variant={sortBy === 'referrals' ? 'default' : 'outline'}
+              onClick={() => setSortBy('referrals')}
+              size="sm"
+            >
+              <TrophyIcon className="mr-2 h-4 w-4" />
+              By Referrals
+            </Button>
           </div>
         </div>
 
         {/* User's Rank Card */}
-        {userRank && (
-          <Card className="bg-gradient-1 border-0 text-white">
+        {userRank && userEntry && (
+          <Card className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20">
             <CardHeader>
-              <CardTitle className="text-white">Your Current Rank</CardTitle>
-              <CardDescription className="text-white/80">
+              <CardTitle className="text-foreground flex items-center gap-2">
+                <Award className="h-5 w-5 text-amber-600" />
+                Your Current Rank
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
                 Keep referring to climb the leaderboard!
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4">
-                <div className="text-5xl font-bold">#{userRank}</div>
-                <div>
-                  <p className="text-lg font-semibold">{user?.username}</p>
-                  <p className="text-white/80">Keep up the great work!</p>
+              <div className="flex items-center gap-6">
+                <div className="text-5xl font-bold text-amber-600">#{userRank}</div>
+                <div className="flex-1">
+                  <p className="text-lg font-semibold text-foreground">{user?.username}</p>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Award className="h-4 w-4 text-amber-600" />
+                      <span className="font-semibold text-amber-600">{userEntry.points}</span> points
+                    </span>
+                    <span>•</span>
+                    <span>{userEntry.totalReferrals} referrals</span>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -114,7 +155,11 @@ export function LeaderboardPage() {
 
       {/* Leaderboard Table */}
       <section>
-        <LeaderboardTable data={leaderboard} title="Global Rankings" />
+        <LeaderboardTable 
+          data={leaderboard} 
+          title={`Global Rankings - Sorted by ${sortBy === 'points' ? 'Points' : 'Referrals'}`}
+          sortBy={sortBy}
+        />
       </section>
 
       {/* Pagination */}
@@ -175,8 +220,13 @@ export function LeaderboardPage() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="text-center">
-                <p className="text-3xl font-bold text-primary">{leaderboard.length > 0 ? leaderboard[0]?.totalReferrals : 0}</p>
-                <p className="text-sm text-muted-foreground">Top Referrer Count</p>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <Award className="h-5 w-5 text-amber-600" />
+                  <p className="text-3xl font-bold text-amber-600">
+                    {leaderboard.length > 0 ? leaderboard[0]?.points : 0}
+                  </p>
+                </div>
+                <p className="text-sm text-muted-foreground">Top Score (Points)</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-primary">

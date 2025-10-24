@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { TrophyIcon, MedalIcon, AwardIcon } from 'lucide-react';
+import { TrophyIcon, MedalIcon, AwardIcon, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LeaderboardEntry {
@@ -11,15 +11,22 @@ interface LeaderboardEntry {
   referralCode: string;
   directReferrals: number;
   totalReferrals: number;
+  points: number; // Add points
 }
 
 interface LeaderboardTableProps {
   data: LeaderboardEntry[];
   title?: string;
   preview?: boolean;
+  sortBy?: 'points' | 'referrals'; // Add sortBy prop
 }
 
-export function LeaderboardTable({ data, title = 'Leaderboard', preview = false }: LeaderboardTableProps) {
+export function LeaderboardTable({ 
+  data, 
+  title = 'Leaderboard', 
+  preview = false,
+  sortBy = 'points' // Default to points
+}: LeaderboardTableProps) {
   const displayData = preview ? data.slice(0, 5) : data;
 
   const getRankIcon = (rank: number) => {
@@ -86,13 +93,58 @@ export function LeaderboardTable({ data, title = 'Leaderboard', preview = false 
                     </p>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0 ml-4">
-                  <p className="text-lg sm:text-xl font-bold text-foreground">
-                    {entry.totalReferrals}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    referrals
-                  </p>
+                
+                {/* Show Points or Referrals based on sortBy */}
+                <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 ml-4">
+                  {sortBy === 'points' ? (
+                    <>
+                      {/* Points Display (Primary) */}
+                      <div className="text-right">
+                        <div className="flex items-center justify-end gap-1 mb-0.5">
+                          <Award className="h-4 w-4 text-amber-600" />
+                          <p className="text-lg sm:text-xl font-bold text-amber-600">
+                            {entry.points}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          points
+                        </p>
+                      </div>
+                      {/* Referrals Display (Secondary) */}
+                      <div className="text-right hidden sm:block">
+                        <p className="text-base font-semibold text-foreground">
+                          {entry.totalReferrals}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          referrals
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Referrals Display (Primary) */}
+                      <div className="text-right">
+                        <p className="text-lg sm:text-xl font-bold text-foreground">
+                          {entry.totalReferrals}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          referrals
+                        </p>
+                      </div>
+                      {/* Points Display (Secondary) */}
+                      <div className="text-right hidden sm:block">
+                        <div className="flex items-center justify-end gap-1 mb-0.5">
+                          <Award className="h-4 w-4 text-amber-600" />
+                          <p className="text-base font-semibold text-amber-600">
+                            {entry.points}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          points
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ))
