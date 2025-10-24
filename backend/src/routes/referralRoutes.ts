@@ -26,6 +26,8 @@ router.get('/stats/:userId', async (req: Request, res: Response) => {
         referralCode: stats.referralCode,
         directReferrals: stats.directReferrals,
         totalReferrals: stats.totalReferrals,
+        points: stats.points || 0,
+        generationStats: stats.generationStats,
         lastUpdated: stats.lastUpdated,
       },
     });
@@ -33,7 +35,6 @@ router.get('/stats/:userId', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Get full referral tree
 router.get('/tree/:userId', async (req: Request, res: Response) => {
@@ -55,9 +56,10 @@ router.get('/leaderboard', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
     const page = parseInt(req.query.page as string) || 1;
+    const sortBy = (req.query.sortBy as 'points' | 'referrals') || 'points';
     const skip = (page - 1) * limit;
 
-    const leaderboard = await ReferralService.getLeaderboard(limit, skip);
+    const leaderboard = await ReferralService.getLeaderboard(limit, skip, sortBy);
     const total = await ReferralStats.countDocuments();
     
     res.json({
@@ -101,7 +103,8 @@ router.get('/validate/:referralCode', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
-// Add referral code to existing user (for users who missed it during signup)
+
+// Add referral code to existing user
 router.post('/add-referrer/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
@@ -121,19 +124,16 @@ router.post('/add-referrer/:userId', async (req: Request, res: Response) => {
 
     console.log(`[Add Referrer] Found user: ${user.username}`);
 
-    // Check if user already has a referrer
     if (user.referredBy) {
       console.log(`[Add Referrer] User ${user.username} already has referrer: ${user.referredBy}`);
       return res.status(400).json({ error: 'You already have a referrer' });
     }
 
-    // Check if trying to refer themselves
     if (user.referralCode === referralCode) {
       console.log(`[Add Referrer] User ${user.username} tried to refer themselves`);
       return res.status(400).json({ error: 'You cannot refer yourself' });
     }
 
-    // Validate referral code exists
     const referrer = await User.findOne({ referralCode });
     if (!referrer) {
       console.log(`[Add Referrer] Referral code ${referralCode} not found`);
@@ -142,21 +142,19 @@ router.post('/add-referrer/:userId', async (req: Request, res: Response) => {
 
     console.log(`[Add Referrer] Found referrer: ${referrer.username} (ID: ${referrer._id})`);
 
-    // Update user
     user.referredBy = referralCode;
     await user.save();
     console.log(`[Add Referrer] Updated user ${user.username}, referredBy is now: ${user.referredBy}`);
 
-    // Update referrer's stats
     console.log(`[Add Referrer] Updating stats for referrer ${referrer.username}`);
     await ReferralService.updateReferralStats((referrer._id as Types.ObjectId).toString());
     console.log(`[Add Referrer] Stats update completed`);
 
-    // Fetch and return updated stats
     const updatedStats = await ReferralStats.findOne({ userId: (referrer._id as Types.ObjectId).toString() });
     console.log(`[Add Referrer] Referrer's updated stats:`, {
       direct: updatedStats?.directReferrals,
-      total: updatedStats?.totalReferrals
+      total: updatedStats?.totalReferrals,
+      points: updatedStats?.points
     });
 
     res.json({
@@ -164,7 +162,8 @@ router.post('/add-referrer/:userId', async (req: Request, res: Response) => {
       message: 'Referral code added successfully',
       referrerStats: {
         directReferrals: updatedStats?.directReferrals,
-        totalReferrals: updatedStats?.totalReferrals
+        totalReferrals: updatedStats?.totalReferrals,
+        points: updatedStats?.points
       }
     });
   } catch (error: any) {
@@ -186,7 +185,6 @@ router.get('/direct/:userId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get direct referrals with pagination
     const directReferrals = await User.find({ referredBy: user.referralCode })
       .select('username email referralCode createdAt isVerified')
       .sort({ createdAt: -1 })
@@ -194,10 +192,8 @@ router.get('/direct/:userId', async (req: Request, res: Response) => {
       .limit(limit)
       .lean();
 
-    // Get total count for pagination
     const total = await User.countDocuments({ referredBy: user.referralCode });
 
-    // Get stats for each direct referral
     const referralsWithStats = await Promise.all(
       directReferrals.map(async (referral: any) => {
         const stats = await ReferralStats.findOne({ 
@@ -211,9 +207,9 @@ router.get('/direct/:userId', async (req: Request, res: Response) => {
           referralCode: referral.referralCode,
           createdAt: referral.createdAt,
           isVerified: referral.isVerified,
-          // Stats for this referral
           directReferrals: stats?.directReferrals || 0,
           totalReferrals: stats?.totalReferrals || 0,
+          points: stats?.points || 0,
         };
       })
     );
@@ -271,6 +267,5 @@ router.post('/refresh-stats/:userId', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 export default router;

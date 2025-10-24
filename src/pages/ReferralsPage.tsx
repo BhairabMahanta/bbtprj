@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UsersIcon, UserPlusIcon, TrendingUpIcon, CalendarIcon, Loader2, UserPlus, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { UsersIcon, UserPlusIcon, TrendingUpIcon, CalendarIcon, Loader2, UserPlus, Copy, Check, ChevronLeft, ChevronRight, Award } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
@@ -16,6 +16,7 @@ interface Referral {
   isVerified: boolean;
   directReferrals: number;
   totalReferrals: number;
+  points: number;
 }
 
 interface ReferralStats {
@@ -24,6 +25,8 @@ interface ReferralStats {
   referralCode: string;
   directReferrals: number;
   totalReferrals: number;
+  points: number;
+  generationStats?: Record<number, number>;
 }
 
 interface Referrer {
@@ -288,7 +291,29 @@ export function ReferralsPage() {
         </Card>
       </section>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+      {/* Stats Cards - Points Card First */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+        {/* Points Card - FIRST */}
+        <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground mb-2">Referral Points</p>
+                <p className="text-3xl font-bold font-headline text-amber-600">
+                  {stats?.points || 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Exponential rewards
+                </p>
+              </div>
+              <div className="rounded-lg bg-amber-500/10 p-3">
+                <Award className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total Referrals Card */}
         <Card className="bg-card text-card-foreground border-border">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
@@ -305,6 +330,7 @@ export function ReferralsPage() {
           </CardContent>
         </Card>
 
+        {/* Direct Referrals Card */}
         <Card className="bg-card text-card-foreground border-border">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
@@ -321,6 +347,7 @@ export function ReferralsPage() {
           </CardContent>
         </Card>
 
+        {/* Indirect Referrals Card */}
         <Card className="bg-card text-card-foreground border-border">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
@@ -338,6 +365,68 @@ export function ReferralsPage() {
         </Card>
       </section>
 
+      {/* Points Breakdown Section */}
+      {stats?.generationStats && Object.keys(stats.generationStats).length > 0 && (
+        <section>
+          <Card className="bg-gradient-to-r from-amber-500/5 to-orange-500/5 border-amber-500/10">
+            <CardHeader>
+              <CardTitle className="font-headline text-foreground flex items-center gap-2">
+                <Award className="h-5 w-5 text-amber-600" />
+                Points Breakdown by Generation
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {Object.entries(stats.generationStats)
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([generation, count]) => {
+                    const gen = Number(generation);
+                    const required = Math.pow(2, gen);
+                    const points = Math.floor(count / required);
+                    const progress = (count % required) / required * 100;
+                    
+                    return (
+                      <div key={generation} className="p-4 rounded-lg bg-background border border-border">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-foreground">
+                            Generation {generation}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {points} {points === 1 ? 'point' : 'points'}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {count} / {required} referrals
+                            </span>
+                            <span className="text-amber-600 font-medium">
+                              {progress.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div 
+                              className="bg-gradient-to-r from-amber-500 to-orange-500 h-2 rounded-full transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              <div className="mt-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">How it works:</span> Generation 1 requires 2 referrals per point, 
+                  Generation 2 requires 4, Generation 3 requires 8, and so on (2<sup>n</sup> formula).
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* Direct Referrals Section */}
       <section className="space-y-4 sm:space-y-6">
         <h2 className="text-xl sm:text-2xl font-bold font-headline text-foreground">
           Direct Referrals
@@ -398,8 +487,8 @@ export function ReferralsPage() {
                         </div>
 
                         {/* Referral Stats Row */}
-                        <div className="flex items-center gap-4 pl-16">
-                          <div className="flex items-center gap-6 text-sm">
+                        <div className="flex items-center gap-4 pl-0 sm:pl-16">
+                          <div className="flex items-center gap-4 sm:gap-6 text-sm flex-wrap">
                             <div className="flex items-center gap-2">
                               <UserPlusIcon className="h-4 w-4 text-muted-foreground" />
                               <span className="text-muted-foreground">Direct:</span>
@@ -409,6 +498,11 @@ export function ReferralsPage() {
                               <TrendingUpIcon className="h-4 w-4 text-muted-foreground" />
                               <span className="text-muted-foreground">Total:</span>
                               <span className="font-semibold text-foreground">{referral.totalReferrals}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Award className="h-4 w-4 text-amber-600" />
+                              <span className="text-muted-foreground">Points:</span>
+                              <span className="font-semibold text-amber-600">{referral.points || 0}</span>
                             </div>
                             {referral.totalReferrals > 0 && (
                               <div className="text-xs text-muted-foreground">
@@ -425,7 +519,7 @@ export function ReferralsPage() {
 
                 {/* Pagination */}
                 {pagination.pages > 1 && (
-                  <div className="flex items-center justify-between mt-6 pt-6 border-t border-border">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border">
                     <div className="text-sm text-muted-foreground">
                       Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
                       {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
@@ -444,7 +538,6 @@ export function ReferralsPage() {
                       <div className="flex items-center gap-1">
                         {Array.from({ length: pagination.pages }, (_, i) => i + 1)
                           .filter(page => {
-                            // Show first page, last page, current page, and pages around current
                             return (
                               page === 1 ||
                               page === pagination.pages ||
@@ -488,6 +581,7 @@ export function ReferralsPage() {
         </Card>
       </section>
 
+      {/* Indirect Referrals Info */}
       {indirectCount > 0 && (
         <section>
           <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">

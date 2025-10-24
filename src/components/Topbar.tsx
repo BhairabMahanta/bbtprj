@@ -1,4 +1,4 @@
-import { SearchIcon, BellIcon, LogOut } from 'lucide-react';
+import { SearchIcon, BellIcon, LogOut, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -32,12 +32,22 @@ export function Topbar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Load user from localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    loadUser();
   }, []);
+
+  const loadUser = async () => {
+    try {
+      // ALWAYS fetch fresh user data from API - don't trust localStorage
+      const userData = await authApi.getCurrentUser();
+      setUser(userData);
+      // Optional: Update localStorage for other uses, but never READ from it for admin checks
+      localStorage.setItem('user', JSON.stringify(userData));
+    } catch (error) {
+      console.error('Error loading user:', error);
+      // If API fails, redirect to login
+      navigate('/login');
+    }
+  };
 
   const getInitials = (username: string) => {
     if (!username) return 'U';
@@ -53,23 +63,28 @@ export function Topbar() {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
       
-      // Call logout API if refresh token exists
       if (refreshToken) {
         await authApi.logout(refreshToken);
       }
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear all stored data
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       localStorage.removeItem('pendingVerificationEmail');
-      
-      // Redirect to login
       navigate('/login');
     }
   };
+
+  // Don't render until we have user data
+  if (!user) {
+    return (
+      <header className="sticky top-0 z-50 flex h-16 sm:h-20 items-center justify-between border-b border-border bg-card px-4 sm:px-6 md:px-8 lg:px-12">
+        <div className="flex-1" />
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-50 flex h-16 sm:h-20 items-center justify-between border-b border-border bg-card px-4 sm:px-6 md:px-8 lg:px-12">
@@ -120,6 +135,17 @@ export function Topbar() {
                   >
                     My Referrals
                   </CommandItem>
+                  {user.isAdmin && (
+                    <CommandItem 
+                      className="text-foreground hover:bg-muted cursor-pointer"
+                      onSelect={() => {
+                        navigate('/dashboard/admin');
+                        setSearchOpen(false);
+                      }}
+                    >
+                      Admin Dashboard
+                    </CommandItem>
+                  )}
                 </CommandGroup>
               </CommandList>
             </Command>
@@ -159,11 +185,11 @@ export function Topbar() {
             <Button variant="ghost" className="relative rounded-full bg-transparent hover:bg-muted w-10 h-10 p-0">
               <Avatar className="w-full h-full">
                 <AvatarImage 
-                  src={user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`}
-                  alt={user?.username || 'User'} 
+                  src={user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
+                  alt={user.username} 
                 />
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  {getInitials(user?.username || 'User')}
+                  {getInitials(user.username)}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -171,9 +197,17 @@ export function Topbar() {
           <DropdownMenuContent className="w-56 bg-popover text-popover-foreground" align="end">
             <DropdownMenuLabel className="text-foreground">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user?.username || 'User'}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium leading-none">{user.username}</p>
+                  {user.isAdmin && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                      <Shield className="w-3 h-3 mr-1" />
+                      Admin
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs leading-none text-muted-foreground truncate">
-                  {user?.email || ''}
+                  {user.email}
                 </p>
               </div>
             </DropdownMenuLabel>
@@ -190,6 +224,18 @@ export function Topbar() {
             >
               My Referrals
             </DropdownMenuItem>
+            {user.isAdmin && (
+              <>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem 
+                  className="text-amber-600 hover:bg-amber-500/10 text-sm cursor-pointer font-medium"
+                  onClick={() => navigate('/dashboard/admin')}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Admin Dashboard
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem 
               className="text-destructive hover:bg-destructive/10 text-sm cursor-pointer"

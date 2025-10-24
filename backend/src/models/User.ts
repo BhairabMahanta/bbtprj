@@ -25,7 +25,10 @@ export interface IUser extends Document {
   
   // Referral system fields
   referralCode: string;
-  referredBy: string | null; // referralCode of the person who referred this user
+  referredBy: string | null;
+  points: number; // ADD THIS - Track points in User model too
+  // Admin field
+  isAdmin: boolean; // ADD THIS
     
   // Methods
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -79,6 +82,13 @@ const UserSchema: Schema = new Schema(
         return `https://api.dicebear.com/7.x/avataaars/svg?seed=akaimnky`;
       }
     },
+    // ADD THIS FIELD
+    points: {
+      type: Number,
+      default: 0,
+      index: true, // For leaderboard queries
+    },
+    
     settings: {
       type: {
         soundVolume: {
@@ -97,11 +107,16 @@ const UserSchema: Schema = new Schema(
       default: () => nanoid(10),
       index: true,
     },
-    // ADD THIS FIELD
     referredBy: {
       type: String,
       default: null,
-      index: true, // Index for efficient queries
+      index: true,
+    },
+    // ADD THIS FIELD
+    isAdmin: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     highestScore: {
       type: Number,
@@ -113,7 +128,6 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-
 // Indexes for performance
 UserSchema.index({ createdAt: -1 });
 UserSchema.index({ email: 1, username: 1 });
@@ -121,7 +135,7 @@ UserSchema.index({ email: 1, username: 1 });
 // Hash password before saving
 UserSchema.pre<IUser>('save', async function(next) {
   if (!this.isModified('password')) return next();
-923014
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);

@@ -431,7 +431,7 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
       res.status(404).json({ error: 'User not found' });
       return;
     }
-
+console.log("Fetched user data for /me:", user);
     res.json({
       id: user._id,
       username: user.username,
@@ -440,6 +440,7 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
       isVerified: user.isVerified,
       referralCode: user.referralCode,
       referredBy: user.referredBy,
+      isAdmin: user.isAdmin, // Make sure this is included!
       settings: user.settings,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt

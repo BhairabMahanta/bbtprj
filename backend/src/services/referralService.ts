@@ -15,6 +15,8 @@ export class ReferralService {
         directReferrals: 0,
         totalReferrals: 0,
         referralTree: [],
+        points: 0,
+        generationStats: new Map(),
       });
       console.log(`[ReferralService] Stats initialized successfully for ${userId}`);
     } catch (error) {
@@ -22,6 +24,78 @@ export class ReferralService {
       throw error;
     }
   }
+
+  /**
+   * Get all referrals organized by generation/level
+   */
+  static async getReferralsByGeneration(userId: string): Promise<Map<number, string[]>> {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const generationMap = new Map<number, string[]>();
+    const visited = new Set<string>();
+    
+    // BFS to traverse the tree level by level
+    interface QueueItem {
+      referralCode: string;
+      level: number;
+    }
+    
+    const queue: QueueItem[] = [{ referralCode: user.referralCode, level: 0 }];
+
+    while (queue.length > 0) {
+      const { referralCode, level } = queue.shift()!;
+      
+      if (visited.has(referralCode)) continue;
+      visited.add(referralCode);
+      
+      // Find all users referred by this code
+      const directRefs = await User.find({ referredBy: referralCode })
+        .select('_id referralCode')
+        .lean();
+      
+      if (directRefs.length > 0) {
+        const nextLevel = level + 1;
+        
+        for (const ref of directRefs) {
+          const refId = (ref._id as mongoose.Types.ObjectId).toString();
+          
+          // Add to generation map
+          if (!generationMap.has(nextLevel)) {
+            generationMap.set(nextLevel, []);
+          }
+          generationMap.get(nextLevel)!.push(refId);
+          
+          // Add to queue for next level
+          queue.push({ referralCode: ref.referralCode, level: nextLevel });
+        }
+      }
+    }
+
+    return generationMap;
+  }
+
+  /**
+   * Calculate points based on exponential generation system
+   * Generation 1: 2 referrals = 1 point
+   * Generation 2: 4 referrals = 1 point
+   * Generation 3: 8 referrals = 1 point
+   * Generation n: 2^n referrals = 1 point
+   */
+static calculatePoints(generationStats: Map<string, number>): number {
+  let totalPoints = 0;
+
+  for (const [generationStr, count] of generationStats.entries()) {
+    const generation = parseInt(generationStr); // Convert string back to number for calculation
+    const requiredForPoint = Math.pow(2, generation);
+    const pointsFromGeneration = Math.floor(count / requiredForPoint);
+    totalPoints += pointsFromGeneration;
+    
+    console.log(`[Points] Generation ${generation}: ${count} referrals, requires ${requiredForPoint} per point = ${pointsFromGeneration} points`);
+  }
+
+  return totalPoints;
+}
 
   /**
    * Get all referrals (direct and indirect) for a user
@@ -32,16 +106,14 @@ export class ReferralService {
 
     const allReferrals: string[] = [];
     const queue: string[] = [user.referralCode];
-    const visited = new Set<string>(); // Prevent infinite loops
+    const visited = new Set<string>();
 
     while (queue.length > 0) {
       const currentCode = queue.shift()!;
       
-      // Skip if already visited
       if (visited.has(currentCode)) continue;
       visited.add(currentCode);
       
-      // Find all users referred by this code
       const directRefs = await User.find({ referredBy: currentCode }).select('_id referralCode');
       
       for (const ref of directRefs) {
@@ -67,91 +139,138 @@ export class ReferralService {
   /**
    * Update referral stats for a user and all their ancestors
    */
-  static async updateReferralStats(userId: string): Promise<void> {
-    try {
-      console.log(`[ReferralService] Updating stats for user ${userId}`);
-      
-      const user = await User.findById(userId);
-      if (!user) {
-        console.error(`[ReferralService] User ${userId} not found`);
-        throw new Error('User not found');
-      }
-
-      console.log(`[ReferralService] Found user: ${user.username} (${user.referralCode})`);
-
-      // Get all referrals for this user
-      const allReferralIds = await this.getAllReferrals(userId);
-      const directReferrals = await User.find({ referredBy: user.referralCode });
-
-      console.log(`[ReferralService] User ${user.username} has:`, {
-        directReferrals: directReferrals.length,
-        totalReferrals: allReferralIds.length,
-        referralTree: allReferralIds
-      });
-
-      // Update or create stats for this user
-      const updatedStats = await ReferralStats.findOneAndUpdate(
-        { userId: (user._id as mongoose.Types.ObjectId).toString() },
-        {
-          $set: {
-            userId: (user._id as mongoose.Types.ObjectId).toString(),
-            referralCode: user.referralCode,
-            directReferrals: directReferrals.length,
-            totalReferrals: allReferralIds.length,
-            referralTree: allReferralIds,
-            lastUpdated: new Date(),
-          }
-        },
-        { upsert: true, new: true, runValidators: true }
-      );
-
-      console.log(`[ReferralService] Stats updated for ${user.username}:`, {
-        direct: updatedStats?.directReferrals,
-        total: updatedStats?.totalReferrals
-      });
-
-      // Update all ancestor stats (propagate up the tree)
-      if (user.referredBy) {
-        console.log(`[ReferralService] User has referrer with code: ${user.referredBy}`);
-        const referrer = await User.findOne({ referralCode: user.referredBy });
-        if (referrer) {
-          console.log(`[ReferralService] Updating ancestor: ${referrer.username}`);
-          await this.updateReferralStats((referrer._id as mongoose.Types.ObjectId).toString());
-        } else {
-          console.warn(`[ReferralService] Referrer not found for code: ${user.referredBy}`);
-        }
-      }
-    } catch (error) {
-      console.error(`[ReferralService] Error updating stats for ${userId}:`, error);
-      throw error;
+static async updateReferralStats(userId: string): Promise<void> {
+  try {
+    console.log(`[ReferralService] Updating stats for user ${userId}`);
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error(`[ReferralService] User ${userId} not found`);
+      throw new Error('User not found');
     }
+
+    console.log(`[ReferralService] Found user: ${user.username} (${user.referralCode})`);
+
+    // Get all referrals organized by generation
+    const generationMap = await this.getReferralsByGeneration(userId);
+    
+    // Convert to plain object for storage - USE STRING KEYS
+    const generationStats = new Map<string, number>(); // Changed from Map<number, number>
+    let totalReferrals = 0;
+    
+    for (const [level, refs] of generationMap.entries()) {
+      generationStats.set(level.toString(), refs.length); // Convert number to string!
+      totalReferrals += refs.length;
+    }
+
+    // Calculate points - now we need to handle string keys
+    const points = this.calculatePoints(generationStats);
+
+    // Get direct referrals count
+    const directReferrals = await User.find({ referredBy: user.referralCode });
+    const allReferralIds = await this.getAllReferrals(userId);
+
+    console.log(`[ReferralService] User ${user.username} has:`, {
+      directReferrals: directReferrals.length,
+      totalReferrals: allReferralIds.length,
+      points,
+      generationStats: Object.fromEntries(generationStats)
+    });
+
+    // Update or create stats for this user
+// After updating ReferralStats, also update User model
+const updatedStats = await ReferralStats.findOneAndUpdate(
+  { userId: (user._id as mongoose.Types.ObjectId).toString() },
+  {
+    $set: {
+      userId: (user._id as mongoose.Types.ObjectId).toString(),
+      referralCode: user.referralCode,
+      directReferrals: directReferrals.length,
+      totalReferrals: allReferralIds.length,
+      referralTree: allReferralIds,
+      points,
+      generationStats,
+      lastUpdated: new Date(),
+    }
+  },
+  { upsert: true, new: true, runValidators: true }
+);
+
+// SYNC POINTS TO USER MODEL
+await User.findByIdAndUpdate(
+  user._id,
+  { $set: { points } }
+);
+
+console.log(`[ReferralService] Stats updated for ${user.username}:`, {
+  direct: updatedStats?.directReferrals,
+  total: updatedStats?.totalReferrals,
+  points: updatedStats?.points
+});
+
+
+    console.log(`[ReferralService] Stats updated for ${user.username}:`, {
+      direct: updatedStats?.directReferrals,
+      total: updatedStats?.totalReferrals,
+      points: updatedStats?.points
+    });
+
+    // Update all ancestor stats (propagate up the tree)
+    if (user.referredBy) {
+      console.log(`[ReferralService] User has referrer with code: ${user.referredBy}`);
+      const referrer = await User.findOne({ referralCode: user.referredBy });
+      if (referrer) {
+        console.log(`[ReferralService] Updating ancestor: ${referrer.username}`);
+        await this.updateReferralStats((referrer._id as mongoose.Types.ObjectId).toString());
+      } else {
+        console.warn(`[ReferralService] Referrer not found for code: ${user.referredBy}`);
+      }
+    }
+  } catch (error) {
+    console.error(`[ReferralService] Error updating stats for ${userId}:`, error);
+    throw error;
   }
+}
+
 
   /**
-   * Get leaderboard sorted by total referrals
+   * Get leaderboard sorted by points (or total referrals as fallback)
    */
-  static async getLeaderboard(limit: number = 100, skip: number = 0) {
-    const leaderboard = await ReferralStats.find()
-      .sort({ totalReferrals: -1, createdAt: 1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
 
-    const userIds = leaderboard.map((stat) => stat.userId);
-    const users = await User.find({ _id: { $in: userIds } }).select('username email referralCode');
+/**
+ * Get leaderboard sorted by points (or total referrals as fallback)
+ */
+static async getLeaderboard(limit: number = 100, skip: number = 0, sortBy: 'points' | 'referrals' = 'points') {
+  // Fix: Use explicit type assertion or string keys with proper typing
+  const sortCriteria = sortBy === 'points' 
+    ? { points: -1 as const, totalReferrals: -1 as const, createdAt: 1 as const } 
+    : { totalReferrals: -1 as const, points: -1 as const, createdAt: 1 as const };
+  
+  const leaderboard = await ReferralStats.find()
+    .sort(sortCriteria)
+    .skip(skip)
+    .limit(limit)
+    .lean();
 
-    const userMap = new Map(users.map((u) => [(u._id as mongoose.Types.ObjectId).toString(), u]));
+  const userIds = leaderboard.map((stat) => stat.userId);
+  const users = await User.find({ _id: { $in: userIds } }).select('username email referralCode');
 
-    return leaderboard.map((stat, index) => ({
-      rank: skip + index + 1,
-      userId: stat.userId,
-      username: userMap.get(stat.userId)?.username || 'Unknown',
-      email: userMap.get(stat.userId)?.email || 'Unknown',
-      referralCode: stat.referralCode,
-      directReferrals: stat.directReferrals,
-      totalReferrals: stat.totalReferrals,
-    }));
-  }
+  const userMap = new Map(users.map((u) => [(u._id as mongoose.Types.ObjectId).toString(), u]));
+
+  return leaderboard.map((stat, index) => ({
+    rank: skip + index + 1,
+    userId: stat.userId,
+    username: userMap.get(stat.userId)?.username || 'Unknown',
+    email: userMap.get(stat.userId)?.email || 'Unknown',
+    referralCode: stat.referralCode,
+    directReferrals: stat.directReferrals,
+    totalReferrals: stat.totalReferrals,
+    points: stat.points || 0,
+    generationStats: stat.generationStats,
+  }));
+}
+
+
 
   /**
    * Get user's referral tree structure

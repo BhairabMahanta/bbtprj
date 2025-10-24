@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import referralRoutes from './routes/referralRoutes';
+import adminRoutes from './routes/adminRoutes';
 import connectDB from './config/database';
 
 dotenv.config();
@@ -13,7 +14,6 @@ const PORT = process.env.PORT || 5000;
 // CORS configuration - Allow multiple origins
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
-  'http://localhost:3000',
   'http://localhost:5173', // Vite default
   'https://bbtprj.netlify.app'
 ];
@@ -42,6 +42,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
+app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/referrals', referralRoutes);
 

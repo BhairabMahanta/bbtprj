@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://bbtprj.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL2 || 'http://localhost:5000/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -109,8 +109,6 @@ export const authApi = {
   },
 };
 
-// Referral API calls
-// Referral API calls
 export const referralApi = {
   getStats: async (userId: string) => {
     const response = await api.get(`/referrals/stats/${userId}`);
@@ -127,8 +125,8 @@ export const referralApi = {
     return response.data;
   },
 
-  getLeaderboard: async (page: number = 1, limit: number = 100) => {
-    const response = await api.get(`/referrals/leaderboard?page=${page}&limit=${limit}`);
+  getLeaderboard: async (page: number = 1, limit: number = 100, sortBy: 'points' | 'referrals' = 'points') => {
+    const response = await api.get(`/referrals/leaderboard?page=${page}&limit=${limit}&sortBy=${sortBy}`);
     return response.data;
   },
 
@@ -146,4 +144,37 @@ export const referralApi = {
     const response = await api.get(`/referrals/user/code/${referralCode}`);
     return response.data;
   },
+
+  refreshStats: async (userId: string) => {
+    const response = await api.post(`/referrals/refresh-stats/${userId}`);
+    return response.data;
+  },
 };
+
+// Admin API calls
+export const adminApi = {
+  getStats: async () => {
+    const response = await api.get('/admin/stats');
+    return response.data;
+  },
+
+  generateTestData: async (userId: string, levels: number = 3, usersPerLevel: number = 2) => {
+    const response = await api.post('/admin/generate-test-data', {
+      userId,
+      levels,
+      usersPerLevel,
+    });
+    return response.data;
+  },
+
+  deleteTestData: async () => {
+    const response = await api.delete('/admin/delete-test-data');
+    return response.data;
+  },
+
+  refreshAllStats: async () => {
+    const response = await api.post('/admin/refresh-all-stats');
+    return response.data;
+  },
+};
+

@@ -9,6 +9,7 @@ import { ReferralsPage } from './pages/ReferralsPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminRoute } from './components/AdminRoute'; // Add this import
 import { GetReferredPage } from './pages/GetReferredPage';
 
 function App() {
@@ -31,7 +32,15 @@ function App() {
         <Route index element={<PersonalDashboard />} />
         <Route path="leaderboard" element={<LeaderboardPage />} />
         <Route path="referrals" element={<ReferralsPage />} />
-        <Route path="admin" element={<AdminDashboard />} />
+        {/* Admin route with additional protection */}
+        <Route 
+          path="admin" 
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          } 
+        />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="get-referred" element={<GetReferredPage />} />
       </Route>
